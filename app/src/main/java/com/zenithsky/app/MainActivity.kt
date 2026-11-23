@@ -9,20 +9,25 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.zenithsky.app.data.local.ZenithSkyDatabase
 import com.zenithsky.app.ui.airline.AirlineListActivity
 import com.zenithsky.app.ui.airplane.AirplaneListActivity
 import com.zenithsky.app.ui.airport.AirportListActivity
 import com.zenithsky.app.ui.components.ZenithScaffold
 import com.zenithsky.app.ui.theme.ZenithSkyTheme
 
-// Responsable: Luis (agregar historial de OperacionLog y aviones destacados con collectAsState)
+
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,6 +43,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun PanelPrincipal() {
     val context = LocalContext.current
+
+    // Room: cada vez que cambia la tabla, estas listas se actualizan solas
+    val db = ZenithSkyDatabase.getInstance(context)
+    val historial by db.operacionLogDao().obtenerTodos().collectAsState(initial = emptyList())
+    val destacados by db.avionDestacadoDao().obtenerTodos().collectAsState(initial = emptyList())
 
     ZenithScaffold(title = "ZenithSky — Panel Operativo") { innerPadding ->
         Column(
@@ -57,7 +67,18 @@ fun PanelPrincipal() {
                 context.startActivity(Intent(context, AirplaneListActivity::class.java))
             }
 
-            // TODO Luis: LazyColumn con historial (OperacionLog) y aviones destacados (AvionDestacado)
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                item { Text("Historial de operaciones", style = MaterialTheme.typography.titleMedium) }
+                if (historial.isEmpty()) item { Text("Sin operaciones todavía") }
+                items(historial) { log -> Text("${log.operacion}: ${log.detalle}") }
+
+                item { Text("Aviones destacados", style = MaterialTheme.typography.titleMedium) }
+                if (destacados.isEmpty()) item { Text("Sin aviones destacados") }
+                items(destacados) { avion -> Text(avion.descripcion) }
+            }
         }
     }
 }
