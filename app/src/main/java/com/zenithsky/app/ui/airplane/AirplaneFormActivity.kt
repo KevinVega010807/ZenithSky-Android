@@ -1,5 +1,7 @@
 package com.zenithsky.app.ui.airplane
 
+import com.zenithsky.app.data.local.ZenithSkyDatabase
+import com.zenithsky.app.data.local.entity.OperacionLog
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -110,8 +112,15 @@ class AirplaneFormActivity : ComponentActivity() {
                                     }
 
                                     if (response.isSuccessful) {
+                                        val id = if (esEdicion) airplaneId else (response.body()?.airplaneId ?: 0)
+                                        ZenithSkyDatabase.getInstance(context).operacionLogDao().insertar(
+                                            OperacionLog(
+                                                operacion = if (esEdicion) "PUT" else "POST",
+                                                detalle = "Avión #$id ${if (esEdicion) "actualizado" else "creado"} (${tipo.identifier}, ${aerolinea.airlineName}, $cap pasajeros)",
+                                                fecha = System.currentTimeMillis()
+                                            )
+                                        )
                                         Toast.makeText(context, "Avión guardado correctamente", Toast.LENGTH_SHORT).show()
-
                                         finish()
                                     } else {
                                         Toast.makeText(context, "Error ${response.code()} al guardar", Toast.LENGTH_SHORT).show()
