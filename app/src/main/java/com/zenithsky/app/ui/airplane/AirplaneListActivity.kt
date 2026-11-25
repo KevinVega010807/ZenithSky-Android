@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +41,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.zenithsky.app.data.local.ZenithSkyDatabase
+import com.zenithsky.app.data.local.entity.AvionDestacado
+import com.zenithsky.app.data.local.entity.OperacionLog
 import com.zenithsky.app.data.remote.RetrofitClient
 import com.zenithsky.app.data.remote.dto.AirlineDto
 import com.zenithsky.app.data.remote.dto.AirplaneDto
@@ -64,6 +68,10 @@ class AirplaneListActivity : ComponentActivity() {
                 var aerolineaFiltro by remember { mutableStateOf<AirlineDto?>(null) }
                 val scope = rememberCoroutineScope()
                 val context = LocalContext.current
+
+                val db = ZenithSkyDatabase.getInstance(context)
+                val destacados by db.avionDestacadoDao().obtenerTodos().collectAsState(initial = emptyList())
+
 
                 fun cargarAviones() {
                     scope.launch {
@@ -94,6 +102,7 @@ class AirplaneListActivity : ComponentActivity() {
                     aerolineas = aerolineas,
                     tipoFiltro = tipoFiltro,
                     aerolineaFiltro = aerolineaFiltro,
+                    idsDestacados = destacados.map { it.airplaneId },
                     onTipoSeleccionado = { tipo ->
                         tipoFiltro = tipo
                         cargarAviones()
@@ -115,6 +124,15 @@ class AirplaneListActivity : ComponentActivity() {
                             try {
                                 val response = RetrofitClient.api.deleteAirplane(avion.airplaneId)
                                 if (response.isSuccessful) {
+                                    db.operacionLogDao().insertar(
+                                        OperacionLog(
+                                            operacion = "DELETE",
+                                            detalle = "Avión #${avion.airplaneId} eliminado (${avion.airplaneType.identifier}, ${avion.airline.airlineName})",
+                                            fecha = System.currentTimeMillis()
+                                        )
+                                    )
+                                    db.avionDestacadoDao().eliminarPorAirplaneId(avion.airplaneId)
+
                                     Toast.makeText(context, "Avión eliminado", Toast.LENGTH_SHORT).show()
                                     cargarAviones()
                                 } else {
@@ -122,6 +140,23 @@ class AirplaneListActivity : ComponentActivity() {
                                 }
                             } catch (e: Exception) {
                                 Toast.makeText(context, "No se pudo conectar con la API", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    onDestacarClick = { avion ->
+                        scope.launch {
+                            val yaEsDestacado = destacados.any { it.airplaneId == avion.airplaneId }
+                            if (yaEsDestacado) {
+                                db.avionDestacadoDao().eliminarPorAirplaneId(avion.airplaneId)
+                                Toast.makeText(context, "Quitado de destacados", Toast.LENGTH_SHORT).show()
+                            } else {
+                                db.avionDestacadoDao().insertar(
+                                    AvionDestacado(
+                                        airplaneId = avion.airplaneId,
+                                        descripcion = "Avión #${avion.airplaneId} - ${avion.airplaneType.identifier} - ${avion.airline.airlineName} (${avion.capacity} pasajeros)"
+                                    )
+                                )
+                                Toast.makeText(context, "Marcado como destacado", Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
@@ -145,11 +180,13 @@ fun ListaAvionesScreen(
     aerolineas: List<AirlineDto>,
     tipoFiltro: AirplaneTypeDto?,
     aerolineaFiltro: AirlineDto?,
+    idsDestacados: List<Int>,
     onTipoSeleccionado: (AirplaneTypeDto?) -> Unit,
     onAerolineaSeleccionada: (AirlineDto?) -> Unit,
     onNuevoClick: () -> Unit,
     onEditarClick: (AirplaneDto) -> Unit,
     onEliminarClick: (AirplaneDto) -> Unit,
+    onDestacarClick: (AirplaneDto) -> Unit,
     onVolverClick: () -> Unit
 ) {
     Scaffold(
@@ -197,8 +234,10 @@ fun ListaAvionesScreen(
                 items(items = aviones, key = { it.airplaneId }) { avion ->
                     AirplaneItem(
                         avion = avion,
+                        esDestacado = idsDestacados.contains(avion.airplaneId),
                         onEditarClick = { onEditarClick(avion) },
-                        onEliminarClick = { onEliminarClick(avion) }
+                        onEliminarClick = { onEliminarClick(avion) },
+                        onDestacarClick = { onDestacarClick(avion) }
                     )
                 }
             }
@@ -209,8 +248,10 @@ fun ListaAvionesScreen(
 @Composable
 fun AirplaneItem(
     avion: AirplaneDto,
+    esDestacado: Boolean,
     onEditarClick: () -> Unit,
-    onEliminarClick: () -> Unit
+    onEliminarClick: () -> Unit,
+    onDestacarClick: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -220,6 +261,7 @@ fun AirplaneItem(
             Row {
                 Text(text = "ID: ", fontWeight = FontWeight.Bold)
                 Text(text = avion.airplaneId.toString())
+                if (esDestacado) Text(text = "  ★ Destacado")
             }
             Row {
                 Text(text = "Capacidad: ", fontWeight = FontWeight.Bold)
@@ -237,6 +279,9 @@ fun AirplaneItem(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onEditarClick) { Text("Editar") }
                 OutlinedButton(onClick = onEliminarClick) { Text("Eliminar") }
+                OutlinedButton(onClick = onDestacarClick) {
+                    Text(if (esDestacado) "Quitar ★" else "Destacar")
+                }
             }
         }
     }
