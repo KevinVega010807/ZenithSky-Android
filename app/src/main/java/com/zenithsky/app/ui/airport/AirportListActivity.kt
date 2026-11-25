@@ -57,9 +57,13 @@ class AirportListActivity : ComponentActivity() {
                 LaunchedEffect(busqueda, recargar) {
                     try {
                         val r = RetrofitClient.api.getAirports(busqueda.ifBlank { null })
-                        if (r.isSuccessful) aeropuertos = r.body() ?: emptyList()
+                        if (r.isSuccessful) {
+                            aeropuertos = r.body() ?: emptyList()
+                        } else {
+                            Toast.makeText(context, "Error ${r.code()} al cargar aeropuertos", Toast.LENGTH_LONG).show()
+                        }
                     } catch (e: Exception) {
-                        Toast.makeText(context, "No se pudo conectar con la API", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
                     }
                 }
 
